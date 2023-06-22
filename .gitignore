@@ -1,0 +1,10 @@
+## Artifacts
+*.egg-info*
+*.pyc
+*__pycache__*
+*.DS_Store
+
+## Data
+data/resources/
+data/models/
+data/results/

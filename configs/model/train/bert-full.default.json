@@ -1,0 +1,20 @@
+{
+    "classifier_only":false,
+    "train_batch_size":16,
+    "eval_batch_size":32,
+    "balance_task_weights":true,
+    "class_balance":true,
+    "p_dropout":0.1,
+    "learning_rate":5e-05,
+    "weight_decay":1e-5,
+    "num_train_epochs":10,
+    "max_steps":-1,
+    "cache_frequency":50,
+    "cache_training":false,
+    "metric_for_best_model":"f1",
+    "greater_is_better":true,
+    "early_stop_patience":5,
+    "early_stop_tol":1e-2,
+    "mask_type":"keyword_all",
+    "use_bert_pooler":false
+}
