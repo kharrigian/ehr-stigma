@@ -24,16 +24,16 @@ DEFAULT_KEYWORDS = f"{_ROOT_DIR}/data/resources/keywords/keywords.json"
 DEFAULT_ANNOTATIONS_DIR = f"{_ROOT_DIR}/data/resources/annotations/"
 
 ## BERT Model Paths (Should align with BERT_TOKENIZERS)
-BERT_MODELS = {
+MODELS = {
     "mimic-iv-discharge_clinical-bert":{
-        "credibility_and_obstinance":f"{_ROOT_DIR}/data/resources/models/mimic-iv-discharge_clinical-bert/adamant_fold-0/checkpoint-50/",
-        "compliance":f"{_ROOT_DIR}/data/resources/models/mimic-iv-discharge_clinical-bert/compliance_fold-0/checkpoint-400/",
-        "other_descriptors":f"{_ROOT_DIR}/data/resources/models/mimic-iv-discharge_clinical-bert/other_fold-0/checkpoint-350/"
+        "adamant":os.path.abspath(f"{_ROOT_DIR}/data/resources/models/mimic-iv-discharge_clinical-bert/adamant_fold-0/checkpoint-50/"),
+        "compliance":os.path.abspath(f"{_ROOT_DIR}/data/resources/models/mimic-iv-discharge_clinical-bert/compliance_fold-0/checkpoint-400/"),
+        "other":os.path.abspath(f"{_ROOT_DIR}/data/resources/models/mimic-iv-discharge_clinical-bert/other_fold-0/checkpoint-350/")
     }
 }
 
-## BERT Tokenizers (Should align with BERT_MODELS)
-BERT_TOKENIZERS = {
+## BERT Tokenizers (Should align with MODELS)
+TOKENIZERS = {
     "mimic-iv-discharge_clinical-bert":"emilyalsentzer/Bio_ClinicalBERT"
 }
 
