@@ -206,7 +206,8 @@ def _load_mimic_iv_discharge(clean_text=False,
                              sample_rate_note=None,
                              chunksize=1000,
                              random_state=42,
-                             verbose=True):
+                             verbose=True,
+                             encounter_note_ids=None):
     """
     
     """
@@ -218,6 +219,9 @@ def _load_mimic_iv_discharge(clean_text=False,
                      iterator=True,
                      chunksize=chunksize,
                      encoding="latin-1")
+    ## Encounter IDs
+    if encounter_note_ids is not None:
+        encounter_note_ids = set(encounter_note_ids)
     ## Seeds
     chunk_sampler = np.random.RandomState(random_state)
     ## Run Search
@@ -230,6 +234,9 @@ def _load_mimic_iv_discharge(clean_text=False,
         if sample_rate_note is not None:
             n_df = n_df.sample(frac=sample_rate_note, random_state=chunk_sampler, axis=0, replace=False)
             n_df = n_df.sort_index()
+        ## Filtering
+        if encounter_note_ids is not None:
+            n_df = n_df.loc[n_df["note_id"].isin(encounter_note_ids), :]
         ## Text Normalization
         if clean_text:
             n_df["text"] = n_df["text"].map(clean_excel_text)
@@ -259,7 +266,8 @@ def load_mimic_iv_discharge(clean_text=False,
                             sample_rate_note=None,
                             chunksize=1000,
                             random_state=42,
-                            verbose=False):
+                            verbose=False,
+                            encounter_note_ids=None):
     """
     
     """
@@ -270,7 +278,8 @@ def load_mimic_iv_discharge(clean_text=False,
                                   sample_rate_note=sample_rate_note,
                                   chunksize=chunksize,
                                   random_state=random_state,
-                                  verbose=verbose)
+                                  verbose=verbose,
+                                  encounter_note_ids=encounter_note_ids)
     if not as_iterator:
         out = pd.concat(list(out), axis=0).reset_index(drop=True)
     return out

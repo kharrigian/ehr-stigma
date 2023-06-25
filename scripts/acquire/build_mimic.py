@@ -40,6 +40,7 @@ def parse_command_line():
     _ = parser.add_argument("--load_skip_cleaning", action="store_true", default=False)
     _ = parser.add_argument("--load_random_state", type=int, default=42)
     _ = parser.add_argument("--load_window_size", type=int, default=10)
+    _ = parser.add_argument("--load_annotations_only", action="store_true", default=False, help="If desired, only look for matches amongst notes in annotated label set.")
     args = parser.parse_args()
     return args
 
@@ -87,6 +88,13 @@ def run_search(args):
     print("[Loading Keywords]")
     with open(f"{args.keywords}","r") as the_file:
         task2keyword = json.load(the_file)
+    ## Load Labels
+    labels = None
+    if os.path.exists(f"{args.annotations_dir}/annotations.csv"):
+        print("[Loading Known Labels]")
+        labels = pd.read_csv(f"{args.annotations_dir}/annotations.csv")
+    if labels is None and args.load_annotations_only:
+        raise FileNotFoundError("Must have downloaded annotations.csv file to load matches for annotations only.")
     ## Initialize Search Module
     print("[Initializing Keyword Search Tool]")
     searcher = text_utils.KeywordSearch(task2keyword=task2keyword)
@@ -103,7 +111,8 @@ def run_search(args):
                                              sample_rate_note=args.load_note_sample_rate,
                                              chunksize=args.load_chunksize,
                                              random_state=args.load_random_state,
-                                             verbose=True):
+                                             verbose=True,
+                                             encounter_note_ids=set(labels["encounter_note_id"].values) if labels is not None else None):
         ## Uodate Processed Documents
         n_documents += n_df.shape[0]
         ## Cache Source
@@ -170,11 +179,8 @@ def run_search(args):
         metadata = pd.merge(metadata, source[["encounter_id","encounter_note_service","encounter_note_unit"]], on=["encounter_id"], how="left")
     else:
         raise ValueError("Found multiple encounters for a single discharge note.")
-    ## Load Labels
-    labels = None
-    if os.path.exists(f"{args.annotations_dir}/annotations.csv"):
-        print("[Loading Known Labels]")
-        labels = pd.read_csv(f"{args.annotations_dir}/annotations.csv")
+    ## Annotation Augmentation
+    if labels is not None:
         ## Augment Labels with Match Text + Selected Metadata
         print("[Augmenting Known Labels]")
         labels = pd.merge(match_windows,
