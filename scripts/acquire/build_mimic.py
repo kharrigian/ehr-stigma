@@ -112,7 +112,7 @@ def run_search(args):
                                              chunksize=args.load_chunksize,
                                              random_state=args.load_random_state,
                                              verbose=True,
-                                             encounter_note_ids=set(labels["encounter_note_id"].values) if labels is not None else None):
+                                             encounter_note_ids=set(labels["encounter_note_id"].values) if (args.load_annotations_only and labels is not None) else None):
         ## Uodate Processed Documents
         n_documents += n_df.shape[0]
         ## Cache Source
