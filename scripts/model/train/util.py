@@ -511,7 +511,7 @@ def plot_all_performance(scores,
             ## Hard-Code Target Column
             target = "label"
             ## Find Scores
-            score_dict_cat_target = list(filter(lambda x: x["target"]=="target", score_dict[cat]))
+            score_dict_cat_target = list(filter(lambda x: x["target"]==target, score_dict[cat]))
             ## No Data (e.g. No Tests, No Target)
             if len(score_dict_cat_target) == 0:
                 continue

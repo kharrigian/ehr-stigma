@@ -10,3 +10,6 @@ statsmodels
 torch
 transformers
 umap-learn
+spacy
+pysbd
+medspacy

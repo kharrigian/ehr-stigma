@@ -23,17 +23,67 @@ DEFAULT_KEYWORDS = f"{_ROOT_DIR}/data/resources/keywords/keywords.json"
 ## Default Annotations
 DEFAULT_ANNOTATIONS_DIR = f"{_ROOT_DIR}/data/resources/annotations/"
 
-## BERT Model Paths (Should align with BERT_TOKENIZERS)
+## Model Paths (Should align with Bert Models Should Align with BERT_TOKENIZERS)
 MODELS = {
+    "mimic-iv-discharge_majority_overall":{
+        "model_type":"baseline",
+        "preprocessing":os.path.abspath(f"{_ROOT_DIR}/data/resources/models/mimic-iv-discharge_baseline-majority/preprocessing.params.joblib"),
+        "tasks":{
+            "adamant":os.path.abspath(f"{_ROOT_DIR}/data/resources/models/mimic-iv-discharge_baseline-majority/keyword/majority/adamant_fold-0/"),
+            "compliance":os.path.abspath(f"{_ROOT_DIR}/data/resources/models/mimic-iv-discharge_baseline-majority/keyword/majority/compliance_fold-0/"),
+            "other":os.path.abspath(f"{_ROOT_DIR}/data/resources/models/mimic-iv-discharge_baseline-majority/keyword/majority/other_fold-0/"),
+        }
+    },
+    "mimic-iv-discharge_majority_keyword":{
+        "model_type":"baseline",
+        "preprocessing":os.path.abspath(f"{_ROOT_DIR}/data/resources/models/mimic-iv-discharge_baseline-statistical/preprocessing.params.joblib"),
+        "tasks":{
+            "adamant":os.path.abspath(f"{_ROOT_DIR}/data/resources/models/mimic-iv-discharge_baseline-statistical/keyword/linear/adamant_fold-0/"),
+            "compliance":os.path.abspath(f"{_ROOT_DIR}/data/resources/models/mimic-iv-discharge_baseline-statistical/keyword/linear/compliance_fold-0/"),
+            "other":os.path.abspath(f"{_ROOT_DIR}/data/resources/models/mimic-iv-discharge_baseline-statistical/keyword/linear/other_fold-0/"),
+        }
+    },
+    "mimic-iv-discharge_logistic-regression_context":{
+        "model_type":"baseline",
+        "preprocessing":os.path.abspath(f"{_ROOT_DIR}/data/resources/models/mimic-iv-discharge_baseline-statistical/preprocessing.params.joblib"),
+        "tasks":{
+            "adamant":os.path.abspath(f"{_ROOT_DIR}/data/resources/models/mimic-iv-discharge_baseline-statistical/tokens_tfidf/linear/adamant_fold-0/"),
+            "compliance":os.path.abspath(f"{_ROOT_DIR}/data/resources/models/mimic-iv-discharge_baseline-statistical/tokens_tfidf/linear/compliance_fold-0/"),
+            "other":os.path.abspath(f"{_ROOT_DIR}/data/resources/models/mimic-iv-discharge_baseline-statistical/tokens_tfidf/linear/other_fold-0/"),
+        }
+    },
+    "mimic-iv-discharge_logistic-regression_keyword-context":{
+        "model_type":"baseline",
+        "preprocessing":os.path.abspath(f"{_ROOT_DIR}/data/resources/models/mimic-iv-discharge_baseline-statistical/preprocessing.params.joblib"),
+        "tasks":{
+            "adamant":os.path.abspath(f"{_ROOT_DIR}/data/resources/models/mimic-iv-discharge_baseline-statistical/keyword_tokens_tfidf/linear/adamant_fold-0/"),
+            "compliance":os.path.abspath(f"{_ROOT_DIR}/data/resources/models/mimic-iv-discharge_baseline-statistical/keyword_tokens_tfidf/linear/compliance_fold-0/"),
+            "other":os.path.abspath(f"{_ROOT_DIR}/data/resources/models/mimic-iv-discharge_baseline-statistical/keyword_tokens_tfidf/linear/other_fold-0/"),
+        }
+    },
+    "mimic-iv-discharge_base-bert":{
+        "model_type":"bert",
+        "preprocessing":None,
+        "tasks":{
+            "adamant":os.path.abspath(f"{_ROOT_DIR}/data/resources/models/mimic-iv-discharge_base-bert/adamant_fold-0/checkpoint-250/"),
+            "compliance":os.path.abspath(f"{_ROOT_DIR}/data/resources/models/mimic-iv-discharge_base-bert/compliance_fold-0/checkpoint-100/"),
+            "other":os.path.abspath(f"{_ROOT_DIR}/data/resources/models/mimic-iv-discharge_base-bert/other_fold-0/checkpoint-250/")
+        }
+    },
     "mimic-iv-discharge_clinical-bert":{
-        "adamant":os.path.abspath(f"{_ROOT_DIR}/data/resources/models/mimic-iv-discharge_clinical-bert/adamant_fold-0/checkpoint-50/"),
-        "compliance":os.path.abspath(f"{_ROOT_DIR}/data/resources/models/mimic-iv-discharge_clinical-bert/compliance_fold-0/checkpoint-400/"),
-        "other":os.path.abspath(f"{_ROOT_DIR}/data/resources/models/mimic-iv-discharge_clinical-bert/other_fold-0/checkpoint-350/")
+        "model_type":"bert",
+        "preprocessing":None,
+        "tasks":{
+            "adamant":os.path.abspath(f"{_ROOT_DIR}/data/resources/models/mimic-iv-discharge_clinical-bert/adamant_fold-0/checkpoint-50/"),
+            "compliance":os.path.abspath(f"{_ROOT_DIR}/data/resources/models/mimic-iv-discharge_clinical-bert/compliance_fold-0/checkpoint-400/"),
+            "other":os.path.abspath(f"{_ROOT_DIR}/data/resources/models/mimic-iv-discharge_clinical-bert/other_fold-0/checkpoint-350/")
+        }
     }
 }
 
 ## BERT Tokenizers (Should align with MODELS)
 TOKENIZERS = {
+    "mimic-iv-discharge_base-bert":"emilyalsentzer/Bio_ClinicalBERT",
     "mimic-iv-discharge_clinical-bert":"emilyalsentzer/Bio_ClinicalBERT"
 }
 

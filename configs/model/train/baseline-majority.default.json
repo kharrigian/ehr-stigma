@@ -1,0 +1,17 @@
+{
+    "models":["majority"],
+    "feature_sets":{
+        "keyword":{
+            "components":[
+                {"name":"keyword","source":"keyword","type":"binary","type_kwargs":{}}
+            ],
+            "interactions":[
+            ],
+            "representation":[
+                "keyword"
+            ],
+            "conditional_majority_support":true,
+            "standardize":{"center":false,"scale":false}
+        }
+    }
+}

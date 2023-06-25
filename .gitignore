@@ -6,5 +6,9 @@
 
 ## Data
 data/resources/
+!data/resources/keywords/
 data/models/
 data/results/
+
+## Internal Utilities
+scripts/private

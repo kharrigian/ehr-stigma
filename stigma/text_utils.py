@@ -5,9 +5,18 @@
 
 ## Standard Library
 import re
+import sys
+import string
+import warnings
 from collections import Counter
 
 ## External
+import spacy
+import numpy as np
+from tqdm import tqdm
+from scipy import sparse
+from pysbd.utils import PySBDFactory
+from medspacy.custom_tokenizer import create_medspacy_tokenizer
 from unidecode import unidecode
 
 ######################
@@ -149,6 +158,47 @@ def extract_negated_keyword(keyword, text):
         return keyword
     return text[match.start():match.end()]
 
+def _get_medical_tokenizer_old():
+    """
+    For spacy version 2 (used on the MCEH-Bridge Machine)
+    """
+    ## Initialize Blank Class
+    nlp = spacy.blank("en")
+    ## Create Tokenizer and Add to Class
+    nlp.tokenizer = create_medspacy_tokenizer(nlp)
+    ## Add Sentence Segmentation
+    try:
+        nlp.add_pipe(PySBDFactory(nlp),first=True)
+    except:
+        nlp.add_pipe(nlp.create_pipe('sentencizer'),first=True)
+        warnings.warn("WARNING: Using sentencizer instead of medical sentence segmentation.")
+    return nlp
+
+def _get_medical_tokenizer():
+    """
+    For spacy version 3. use get_medical_tokenizer_old for spacy version 2.
+    """
+    ## Initialize Blank Class
+    nlp = spacy.blank("en")
+    ## Create Tokenizer and Add to Class
+    nlp.tokenizer = create_medspacy_tokenizer(nlp)
+    ## Add Sentence Segmentation
+    try:
+        nlp.add_pipe("medspacy_pysbd",first=True)
+    except:
+        nlp.add_pipe("sentencizer",first=True)
+        warnings.warn("WARNING: Using sentencizer instead of medical sentence segmentation.")
+    return nlp
+
+def get_medical_tokenizer():
+    """
+    
+    """
+    try:
+        return _get_medical_tokenizer()
+    except:
+        return _get_medical_tokenizer_old()
+
 ######################
 ### Classes
 ######################
@@ -220,3 +270,297 @@ class KeywordSearch(object):
         ## Simple Map
         return list(map(self.search, texts))
 
+class Tokenizer(object):
+
+    """
+    
+    """
+
+    def __init__(self,
+                 replace_numeric=True,
+                 filter_numeric=True,
+                 replace_punc=True,
+                 filter_punc=True,
+                 negate_handling=True,
+                 preserve_case=False):
+        """
+        
+        """
+        ## Class Tokenizer
+        self._tokenizer = get_medical_tokenizer()
+        ## Class Attributes
+        self._replace_numeric = replace_numeric
+        self._filter_numeric = filter_numeric
+        self._replace_punc = replace_punc
+        self._filter_punc = filter_punc
+        self._negate_handling = negate_handling
+        self._preserve_case = preserve_case
+
+    def _add_negation(self,
+                      tokens):
+        """
+        
+        """
+        ## Token Set
+        negated_tokens = []
+        ## Negation State
+        negate_on = False
+        ## Iterate Through Tokens
+        for t in tokens:
+            ## Check for Negation
+            if t == "not" or t.endswith("n't"):
+                negate_on = True
+                continue
+            ## Update Token Set
+            if negate_on:
+                negated_tokens.append(f"not_{t}")
+                negate_on = False
+            else:
+                negated_tokens.append(t)
+        return negated_tokens
+
+    def _remove_from_text(self,
+                          text,
+                          rstring):
+        """
+        
+        """
+        ## Common Negation Patterns
+        p = r"(cannot|not|\w*n't)?(\s)?\b{}\b".format(rstring)
+        ## Replace
+        text = re.sub(p, "", text)
+        return text
+
+    def tokenize(self,
+                 text,
+                 remove=set()):
+        """
+        
+        """
+        ## Cleaning
+        for r in remove:
+            text = self._remove_from_text(text, rstring=r)
+        ## Split
+        tokens = list(map(lambda i: i.text, self._tokenizer(text)))
+        ## Casing
+        if not self._preserve_case:
+            tokens = list(map(lambda t: t.lower(), tokens))
+        ## Format
+        if self._filter_punc or self._replace_punc:
+            is_punc = lambda x: (x in string.punctuation and x != "-") or all(char in string.punctuation for char in x)
+            tokens = list(map(lambda i: "<PUNC>" if is_punc(i) else i, tokens))
+        if self._filter_punc:
+            tokens = list(filter(lambda i: i != "<PUNC>", tokens))
+        if self._filter_numeric or self._replace_numeric:
+            tokens = list(map(lambda i: "<NUM>" if any(c.isdigit() for c in i) else i, tokens))
+        if self._filter_numeric:
+            tokens = list(filter(lambda i: i != "<NUM>", tokens))
+        ## Remove Empty
+        tokens = list(filter(lambda i: len(i.strip()) > 0, tokens))
+        ## Negate
+        if self._negate_handling:
+            tokens = self._add_negation(tokens)
+        return tokens
+
+class PhraseLearner(object):
+
+    """
+    
+    """
+
+    def __init__(self,
+                 passes=0,
+                 min_count=5,
+                 threshold=1,
+                 verbose=False):
+        """
+        
+        """
+        ## Working Space
+        self._phrase_tuples = {i:{} for i in range(passes)}
+        self._phrase_scores = {i:{} for i in range(passes)}
+        ## Class Attributes
+        self._passes = passes
+        self._min_count = min_count
+        self._threshold = threshold
+        self._verbose = verbose
+
+    def _dict2sparse(self,
+                     dicts,
+                     tardim):
+        """
+        
+        """
+        rows, cols, vals = [], [], []
+        for row_ind, row_count in enumerate(dicts):
+            for col_ind, value in row_count.items():
+                rows.append(row_ind)
+                cols.append(col_ind)
+                vals.append(value)
+        ## Ensure Completeness with Index
+        for t in range(tardim):
+            rows.append(row_ind + 1)
+            cols.append(t)
+            vals.append(1)
+        X = sparse.csr_matrix((vals, (rows, cols)))
+        X = X[:-1]
+        return X
+
+    def _count_cooccurences(self,
+                            vocabulary,
+                            vocabulary2ind,
+                            tokens,
+                            context_l,
+                            context_r):
+        """
+        
+        """
+        ## Check Context Type
+        if not isinstance(context_l, int) or not isinstance(context_r, int):
+            raise TypeError("Context sizes (l,r) should be an integer.")
+        ## Iterator
+        if self._verbose:
+            wrapper = tqdm(tokens, desc="[Counting Context Co-Occurrences]", total=len(tokens), file=sys.stdout)
+        else:
+            wrapper = tokens
+        ## Counts/Co-occurence Matrix
+        counts = np.zeros(len(vocabulary), dtype=int)
+        coco_counts = [Counter() for _ in vocabulary]
+        for toks in wrapper:
+            if not toks:
+                continue
+            for t, tok in enumerate(toks):
+                ## General Count
+                if tok not in vocabulary2ind:
+                    continue
+                counts[vocabulary2ind[tok]] += 1
+                ## Context Co-occurence
+                context_toks = toks[max(0, t-context_l):t] + toks[t+1:t+1+context_r]
+                for ct in context_toks:
+                    if ct not in vocabulary2ind:
+                        continue
+                    coco_counts[vocabulary2ind[tok]][vocabulary2ind[ct]] += 1
+        ## Convert to Sparse
+        coco_counts = self._dict2sparse(coco_counts, tardim=len(vocabulary))
+        return counts, coco_counts
+    
+    def _fit(self,
+             tokens):
+        """
+        
+        """
+        ## Get Vocabulary
+        vocabulary, vocabulary2ind = get_vocabulary(tokens,
+                                                    rm_top=None,
+                                                    min_freq=None,
+                                                    max_freq=None,
+                                                    stopwords=set())
+        ## Counts
+        counts, coco_counts = self._count_cooccurences(vocabulary,
+                                                       vocabulary2ind,
+                                                       tokens,
+                                                       context_l=0,
+                                                       context_r=1)
+        ## Iterator
+        if self._verbose:
+            wrapper = tqdm(enumerate(coco_counts), total=coco_counts.shape[0], desc="[Identifying Phrases]", file=sys.stdout)
+        else:
+            wrapper = enumerate(coco_counts)
+        ## Scoring and Phrase Extraction
+        phrases = []
+        for r, row in wrapper:
+            ## Get Score
+            numerator = (row.toarray() - self._min_count)[0] * len(vocabulary)
+            denominator = counts[r] * counts
+            rscore = np.divide(numerator, denominator)
+            ## Phrase Isolation
+            for c, s in enumerate(rscore):
+                if s > self._threshold:
+                    phrases.append([vocabulary[r], vocabulary[c], s])
+        ## Sort Phrases
+        phrases = sorted(phrases, key=lambda x: x[-1], reverse=True)
+        ## Phrase Mapping and Scores
+        phrase_tuples = {tuple(p[:2]):" ".join(p[:2]) for p in phrases}
+        phrase_scores = {tuple(p[:2]):p[2] for p in phrases}
+        return phrase_tuples, phrase_scores
+    
+    def fit(self,
+            tokens):
+        """
+        
+        """
+        for epoch in range(self._passes):
+            if self._verbose:
+                print(f"[Beginning Phrase Learning Epoch {epoch+1}/{self._passes}")
+            ## Get Phrase Tuples At Epoch
+            self._phrase_tuples[epoch], self._phrase_scores[epoch] = self._fit(tokens)
+            ## Transform Tokens (If More Epochs Remain)
+            if epoch != self._passes - 1:
+                tokens = self._transform(tokens, self._phrase_tuples[epoch])
+        return self
+    
+    def fit_transform(self,
+                      tokens):
+        """
+        
+        """
+        for epoch in range(self._passes):
+            if self._verbose:
+                print(f"[Beginning Phrase Learning Epoch {epoch+1}/{self._passes}")
+            ## Get Phrase Tuples At Epoch
+            self._phrase_tuples[epoch], self._phrase_scores[epoch] = self._fit(tokens)
+            ## Transform Tokens (Always)
+            tokens = self._transform(tokens, self._phrase_tuples[epoch])
+        return tokens
+        
+    def _transform(self,
+                   tokens,
+                   phrase_tuples):
+        """
+        
+        """
+        ## Iterator
+        if self._verbose:
+            wrapper = tqdm(tokens, total=len(tokens), desc="[Rephrasing]", file=sys.stdout)
+        else:
+            wrapper = tokens
+        ## Translate
+        tokens_translated = []
+        for toks in wrapper:
+            i = 0
+            toks_translated = []
+            while i < len(toks):
+                if i == len(toks) - 1:
+                    toks_translated.append(toks[i])
+                    break
+                if (toks[i], toks[i+1]) in phrase_tuples:
+                    toks_translated.append(phrase_tuples[(toks[i], toks[i+1])])
+                    i += 2
+                else:
+                    toks_translated.append(toks[i])
+                    i += 1
+            tokens_translated.append(toks_translated)
+        return tokens_translated
+    
+    def transform(self,
+                  tokens):
+        """
+        
+        """
+        ## Apply Transformation Iteratively
+        for epoch in range(self._passes):
+            if self._verbose:
+                print(f"[Applying Phrase Transformation {epoch+1}/{self._passes}")
+            tokens = self._transform(tokens, self._phrase_tuples[epoch])
+        return tokens
+    
+    def get_phrases(self):
+        """
+        
+        """
+        phrases = []
+        for epoch, epoch_phrases in self._phrase_scores.items():
+            for phrase, score in epoch_phrases.items():
+                phrases.append([epoch, phrase[0], phrase[1], score])
+        phrases = sorted(phrases, key=lambda x: x[-1], reverse=True)
+        return phrases

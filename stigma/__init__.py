@@ -1,2 +1,2 @@
 from .api import StigmaSearch
-from .api import StigmaModel
+from .api import StigmaBaselineModel, StigmaBertModel

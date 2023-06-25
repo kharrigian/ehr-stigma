@@ -13,13 +13,19 @@ import json
 
 ## External Libraries
 import torch
+import joblib
+import numpy as np
 import pandas as pd
+from tqdm import tqdm
+from sklearn import dummy
 from transformers import AutoTokenizer
 
 ## Local Libraries
+from . import util
 from . import settings
 from . import text_utils
 from .model import bert as model_bert
+from .model import util as model_utils
 
 #####################
 ### Classes
@@ -130,10 +136,190 @@ class StigmaSearch(object):
         return subset["document_id"].tolist(), subset["keyword"].tolist(), subset["text"].tolist()
 
 
-class StigmaModel(object):
+class StigmaBaselineModel(object):
 
     """
-    StigmaModel
+    StigmaBaselineModel
+    """
+
+    def __init__(self,
+                 model,
+                 keyword_category,
+                 preprocessing_params=None,
+                 batch_size=None,
+                 **kwargs):
+        """
+        Infer the impact (or lack thereof) of stigmatizing language candidates.
+
+        Args:
+            model (str): Either an ID fround in settings.MODELS or a raw model path.
+            keyword_category (str): Keyword category you wish to load model for
+                                    (e.g., "adamant", "compliance", "other")
+            preprocessing_params (str or None): Either a path to preprocessing_params.joblib
+                                file  associated with the model or None if using a default model
+            batch_size (int): Number of instances to process simultaneously. Choose
+                            based on your available compute resources.
+        """
+        ## Check Keyword Category
+        if keyword_category not in settings.CAT2KEYS:
+            print(">> WARNING: Received unexpected keyword_category not found in settings.CAT2KEYS")
+        ## Validate Keyword Category
+        self._keyword_category = keyword_category
+        ## Validate Model
+        self._model_name = model
+        if model not in settings.MODELS:
+            ## Model Might Be A Path
+            if not os.path.exists(model):
+                raise FileNotFoundError(f"Model not found ('{model}')")
+            self._model = model
+        else:
+            if keyword_category not in settings.MODELS[model]["tasks"]:
+                raise KeyError(f"Keyword category ({keyword_category}) not found in model directory.")
+            if not os.path.exists(settings.MODELS[model]["tasks"][keyword_category]):
+                raise FileNotFoundError("Model not found ('{}')".format(settings.MODELS[model]["tasks"][keyword_category]))
+            if settings.MODELS[model]["model_type"] != "baseline":
+                raise ValueError("Specified a non-baseline model. For BERT models, please use StigmaBertModel instead.")
+            self._model = settings.MODELS[model]["tasks"][keyword_category]
+        ## Preprocessing Parameters
+        if preprocessing_params is None and model not in settings.MODELS:
+            raise ValueError("Must provide a preprocessing_params.joblib file if not using a default baseline model.")
+        elif preprocessing_params is None and model in settings.MODELS:
+            self._preprocessing_params = settings.MODELS[model]["preprocessing"]
+        else:
+            self._preprocessing_params = preprocessing_params
+        ## Initialization
+        _ = self._initialize_preprocessing_params(self._preprocessing_params)
+        _ = self._initialize_model(self._model)
+        ## Other Class Parameters
+        self._batch_size = batch_size
+        
+    def __repr__(self):
+        """
+        Show model information
+
+        Args:
+            None
+        
+        Returns:
+            None
+        """
+        return f"StigmaBaselineModel(model='{self._model_name}', keyword_category='{self._keyword_category}')"
+
+    def _initialize_preprocessing_params(self,
+                                         preprocessing_params):
+        """
+        
+        """
+        ## Check for File
+        if not isinstance(preprocessing_params, str) or not os.path.exists(preprocessing_params):
+            raise FileNotFoundError("Unable to locate desired preprocessing_params.joblib file.")
+        ## Load and Drop Unneccesary
+        prepare_params = joblib.load(preprocessing_params)
+        _ = prepare_params["params"].pop("tokenize", None)
+        ## Store Attribute
+        self._prepare_params = prepare_params
+    
+    def _initialize_model(self,
+                          model):
+        """
+        Intialize the model classifier
+
+        Args:
+            model (str): Path to pretrained model directory. Should contain init.pth and model.pth files.
+        
+        Returns:
+            None: Updates self.model_dict in place
+        """
+        ## Check
+        if not isinstance(model, str) or not os.path.exists(model) or not all(os.path.exists(f"{model}/{s}") for s in ["preprocessor.joblib","classifier.joblib","targets.txt"]):
+            raise FileNotFoundError("Unable to locate desired model directory and/or subfiles.")
+        ## Initialize Dictionary
+        self._model_dict = {}
+        ## Load Tokenizer and Classification Model
+        self._model_dict["preprocessor"] = joblib.load(f"{model}/preprocessor.joblib")
+        ## Load Model
+        self._model_dict["classifier"] = joblib.load(f"{model}/classifier.joblib")
+        ## Load Targets
+        with open(f"{model}/targets.txt","r") as the_file:
+            self._model_dict["targets"] = the_file.read().split("\n")
+        
+    def update_eval_batch_size(self,
+                               batch_size):
+        """
+        Update the processing batch size
+
+        Args:
+            batch_size (int): Desired batch size for inference
+        
+        Returns:
+            None: Updates attribute self._batch_size in place
+        """
+        self._batch_size = batch_size
+    
+    @staticmethod
+    def show_default_models():
+        """
+        See the avalable set of default models.
+
+        Args:
+            None
+        
+        Returns:
+            None (prints available models)
+        """
+        models_str = json.dumps({x:y for x, y in settings.MODELS.items() if y.get("model_type",None)=="baseline"},indent=1)
+        print(models_str)
+
+    def predict(self,
+                text,
+                keywords):
+        """
+        Infer the nature of stigmatizing language candidate instances.
+
+        Args:
+            text (list of str): Context windows containing stigmatizing candidate keywords
+            keywords (list of str): Keywords associated with each context window
+        
+        Returns:
+            predictions (DataFrame): One row per input instance. Each column contains the 
+                            predicted class probability for the respective task classes.
+        """
+        ## Format Input Text as a DataFrame
+        note_df = pd.DataFrame({"note_text":text,"keyword":keywords})
+        note_df["keyword_category"] = self._keyword_category
+        for col in ["encounter_type","enterprise_mrn","encounter_id","encounter_note_id"]:
+            note_df[col] = list(range(note_df.shape[0]))
+        ## Prepare Data For Input into Mdoel
+        note_df = model_utils.prepare_model_data(dataset=note_df,
+                                                 tokenize=True,
+                                                 tokenizer=self._prepare_params["tokenizer"],
+                                                 phrasers=self._prepare_params["phrasers"],
+                                                 return_cache=False,
+                                                 **self._prepare_params["params"])
+        ## Get Groups of Notes
+        note_index_chunks = list(util.chunks(note_df.index.tolist(), self._batch_size)) if self._batch_size is not None else [note_df.index.tolist()]
+        ## Iterate Through Chunks
+        predictions = []
+        for note_indices in tqdm(note_index_chunks, desc="[Making Predictions]", total=len(note_index_chunks)):
+            ## Get Subset
+            note_df_subset = note_df.loc[note_indices].copy()
+            ## Build Base Feature Set
+            X, features = self._model_dict["preprocessor"].build_base_feature_set_independent(annotations=note_df_subset)
+            ## Transform the Base Feature Set
+            if not isinstance(self._model_dict["classifier"], dummy.DummyClassifier):
+                X, features = self._model_dict["preprocessor"].transform_base_feature_set_independent(X_out=X, features=features)
+            ## Make Predictions
+            predictions.append(self._model_dict["classifier"].predict_proba(X))
+        ## Format All Predictions
+        predictions = pd.DataFrame(np.vstack(predictions), columns=self._model_dict["targets"])
+        ## Return
+        return predictions
+
+
+class StigmaBertModel(object):
+
+    """
+    StigmaBertModel
     """
 
     def __init__(self,
@@ -141,7 +327,8 @@ class StigmaModel(object):
                  keyword_category,
                  tokenizer=None,
                  batch_size=16,
-                 device="cpu"):
+                 device="cpu",
+                 **kwargs):
         """
         Infer the impact (or lack thereof) of stigmatizing language candidates.
 
@@ -175,11 +362,13 @@ class StigmaModel(object):
                 raise FileNotFoundError(f"Model not found ('{model}')")
             self._model = model
         else:
-            if keyword_category not in settings.MODELS[model]:
+            if keyword_category not in settings.MODELS[model]["tasks"]:
                 raise KeyError(f"Keyword category ({keyword_category}) not found in model directory.")
-            if not os.path.exists(settings.MODELS[model][keyword_category]):
-                raise FileNotFoundError("Model not found ('{}')".format(settings.MODELS[model][keyword_category]))
-            self._model = settings.MODELS[model][keyword_category]
+            if not os.path.exists(settings.MODELS[model]["tasks"][keyword_category]):
+                raise FileNotFoundError("Model not found ('{}')".format(settings.MODELS[model]["tasks"][keyword_category]))
+            if settings.MODELS[model]["model_type"] != "bert":
+                raise ValueError("Specified a non-bert model. For baseline models, please use StigmaBaselineModel instead.")
+            self._model = settings.MODELS[model]["tasks"][keyword_category]
         ## Tokenizer
         if tokenizer is None:
             if model not in settings.TOKENIZERS:
@@ -196,7 +385,7 @@ class StigmaModel(object):
         """
         
         """
-        return f"StigmaModel(model='{self._model_name}', keyword_category='{self._keyword_category}')"
+        return f"StigmaBertModel(model='{self._model_name}', keyword_category='{self._keyword_category}')"
     
     @staticmethod
     def show_default_models():
@@ -209,7 +398,7 @@ class StigmaModel(object):
         Returns:
             None (prints available models)
         """
-        models_str = json.dumps(settings.MODELS,indent=1)
+        models_str = json.dumps({x:y for x, y in settings.MODELS.items() if y.get("model_type",None)=="bert"},indent=1)
         print(models_str)
 
     def update_eval_batch_size(self,

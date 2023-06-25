@@ -140,7 +140,8 @@ def load_dataset(dataset_id,
     annotations = model_utils.prepare_model_data(dataset=dataset_id,
                                                  eval_original_context=original_context,
                                                  eval_target_context=target_context,
-                                                 eval_rm_keywords=rm_keywords)
+                                                 eval_rm_keywords=rm_keywords,
+                                                 return_cache=False)
     ## Isolate Relevant Keyword Categories
     print("[Isolating Appropriate Keyword Categories]")
     unique_keycats = list(settings.CAT2KEYS.keys())

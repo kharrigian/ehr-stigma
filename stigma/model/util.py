@@ -16,6 +16,8 @@ import pandas as pd
 from tqdm import tqdm
 from scipy.sparse import csr_matrix, vstack, hstack
 from sklearn.feature_extraction import DictVectorizer
+from sklearn.preprocessing import normalize, StandardScaler
+from sklearn.feature_extraction.text import TfidfTransformer
 
 ## Local
 from .. import (text_utils,
@@ -54,15 +56,43 @@ def _load_mimic_iv_discharge_annotations(context_update=False):
 def prepare_model_data(dataset="mimic-iv-discharge",
                        eval_original_context=10,
                        eval_target_context=10,
-                       eval_rm_keywords=None):
+                       eval_rm_keywords=None,
+                       phraser_passes=0,
+                       phraser_min_count=3,
+                       phraser_threshold=10,
+                       tokenize=False,
+                       tokenizer=None,
+                       phrasers=None,
+                       return_cache=False,
+                       **kwargs):
     """
     
     """
     ## Check Dataset
     if isinstance(dataset, str) and dataset not in ["mimic-iv-discharge"]:
         raise KeyError("Dataset not recognized.")
+    ## Check Inputs
+    if phrasers is not None:
+        if not isinstance(phrasers, dict) or not all(i in phrasers.keys() for i in ["tokens","tokens_full"]):
+            raise TypeError("Input phrasers not recognized.")
+    if tokenizer is not None and not isinstance(tokenizer, text_utils.Tokenizer):
+        raise TypeError("Input tokenizer not recognized.")
     ## Context Update
     context_update = eval_original_context != eval_target_context
+    ## Initialize Cache Of Parameters/Learned Transformers
+    prepare_cache = {
+        "params":{
+            "phraser_passes":phraser_passes,
+            "phraser_min_count":phraser_min_count,
+            "phraser_threshold":phraser_threshold,
+            "eval_original_context":eval_original_context,
+            "eval_target_context":eval_target_context,
+            "eval_rm_keywords":eval_rm_keywords,
+            "tokenize":tokenize
+        },
+        "tokenizer":None,
+        "phrasers":None
+    }
     ## Default Set of Expected Columns
     expected_cols = ["encounter_type",
                      "enterprise_mrn",
@@ -101,6 +131,51 @@ def prepare_model_data(dataset="mimic-iv-discharge",
     ## Extract Negated Keyword
     print("[Extracting Negated Keywords]")
     model_data["keyword_negated"] = model_data.apply(lambda row: text_utils.extract_negated_keyword(row["keyword"],row["note_text"]),axis=1)
+    ## If Relevant,Tokenize and Re-Phrase
+    if tokenize:
+        ## Tokenization (Do Before Data Removal to Standardize Phrase Learning Across Runs with Same Context Window)
+        print("[Tokenizing Text Data]")
+        if tokenizer is None:
+            tokenizer = text_utils.Tokenizer(filter_numeric=True,
+                                             filter_punc=True,
+                                             negate_handling=True,
+                                             preserve_case=False)
+        model_data["tokens"] = model_data.apply(lambda row: tokenizer.tokenize(row["note_text"], remove=[row["keyword"]]), axis=1)
+        model_data["tokens_full"] = model_data.apply(lambda row: tokenizer.tokenize(row["note_text"], remove=[]), axis=1)
+        ## Cache Parameterized Tokenizer
+        prepare_cache["tokenizer"] = tokenizer
+        ## N-Gram Transformation (If Desired)
+        if phraser_passes is not None and phraser_passes > 0:
+            ## Tokens w/o Keyword
+            print("[Learning N-Grams within Vocabulary (Tokens w/o Keyword)]")
+            if phrasers is None:
+                phraser_no_key = text_utils.PhraseLearner(passes=phraser_passes,
+                                                          min_count=phraser_min_count,
+                                                          threshold=phraser_threshold,
+                                                          verbose=True)
+                if "split" in model_data.columns and "train" in model_data["split"].values:
+                    phraser_no_key = phraser_no_key.fit(model_data.loc[model_data["split"]=="train","tokens"].tolist())
+                else:
+                    phraser_no_key = phraser_no_key.fit(model_data["tokens"].tolist())
+            else:
+                phraser_no_key = phrasers["tokens"]
+            model_data["tokens"] = phraser_no_key.transform(model_data["tokens"].tolist())
+            ## Tokens w/ Keyword
+            print("[Learning N-Grams within Vocabulary (Tokens w/ Keyword)]")
+            if phrasers is None:
+                phraser_key = text_utils.PhraseLearner(passes=phraser_passes,
+                                                       min_count=phraser_min_count,
+                                                       threshold=phraser_threshold,
+                                                       verbose=True)
+                if "split" in model_data.columns and "train" in model_data["split"].values:
+                    phraser_key = phraser_key.fit(model_data.loc[model_data["split"]=="train","tokens_full"].tolist())
+                else:
+                    phraser_key = phraser_key.fit(model_data["tokens_full"].tolist())
+            else:
+                phraser_key = phrasers["tokens_full"]
+            model_data["tokens_full"] = phraser_key.transform(model_data["tokens_full"].tolist())
+            ## Cache
+            prepare_cache["phrasers"] = {"tokens":phraser_no_key, "tokens_full":phraser_key}
     ## Remove Keyword Removal
     if eval_rm_keywords is not None:
         print("[Removing Removal Set Keywords]")
@@ -111,7 +186,8 @@ def prepare_model_data(dataset="mimic-iv-discharge",
         model_data = model_data.loc[~model_data["keyword_negated"].isin(eval_rm_keywords)]
         model_data = model_data.reset_index(drop=True)
     ## Return
-    return model_data
+    return (model_data, prepare_cache) if return_cache else model_data
+
 
 def get_vectorizer(feature_names):
     """
@@ -305,3 +381,397 @@ class ResampleCVConstraint(object):
             assert len(train_) + len(test_) == X.shape[0]
             ## Yield
             yield train_, test_
+
+class FeaturePreprocessor(object):
+
+    """
+    
+    """
+
+    def __init__(self,
+                 feature_set):
+        """
+        
+        """
+        ## Attributes
+        self._feature_set = feature_set
+        ## Variable Working Space
+        self._base_features = None
+        self._base_vectorizers = {}
+        self._transformers_features = None
+        self._transformers = {}
+    
+    def __repr__(self):
+        """
+        
+        """
+        return "FeaturePreprocessor({})".format(self._feature_set)
+        
+    def build_base_feature_set(self,
+                               annotations,
+                               eval_test=False):
+        """
+        
+        """
+        ## Initialize Cache
+        features = []
+        X_train, X_dev, X_test = [], [], ([] if eval_test else None)
+        ## Build Components
+        sources = set()
+        for fs_component in self._feature_set["components"]:
+            ## Check Source
+            if fs_component["source"] in sources:
+                continue
+            ## Binary
+            if fs_component["source"] in ["keyword","keyword_std","setting"]:
+                ## Target Attribute
+                fs_attr = {"keyword":"keyword_negated","keyword_std":"keyword_standardized","setting":"encounter_type"}
+                fs_attr = fs_attr.get(fs_component["source"])
+                ## Get Vectorizer
+                vectorizer = get_vectorizer(annotations.loc[annotations["split"]=="train",fs_attr].unique())
+                ## Extend Names
+                features.extend([(fs_component["source"],k) for k in vectorizer.get_feature_names()])
+                ## Add to Cache
+                X_train.append(vectorizer.transform(annotations.loc[annotations["split"]=="train",fs_attr].map(lambda i: {i:True}).values))
+                if (annotations["split"]=="dev").any():
+                    X_dev.append(vectorizer.transform(annotations.loc[annotations["split"]=="dev",fs_attr].map(lambda i: {i:True}).values))
+                if eval_test and (annotations["split"]=="test").any():
+                    X_test.append(vectorizer.transform(annotations.loc[annotations["split"]=="test",fs_attr].map(lambda i: {i:True}).values))
+                ## Cache Vectorizer
+                self._base_vectorizers[fs_component["source"]] = vectorizer
+            ## Counts
+            elif fs_component["source"] == "tokens" or fs_component["source"] == "tokens_full":
+                ## Get Vocabulary
+                vocabulary, _ = text_utils.get_vocabulary(annotations.loc[annotations["split"]=="train"][fs_component["source"]],
+                                                          rm_top=10,
+                                                          min_freq=3,
+                                                          max_freq=None,
+                                                          stopwords=["patient","pt"])
+                ## Get Vectorizer
+                vectorizer = get_vectorizer(vocabulary)
+                ## Extend Names
+                features.extend([(fs_component["source"],k) for k in vectorizer.get_feature_names()])
+                ## Add to Cache
+                X_train.append(vectorizer.transform(annotations.loc[annotations["split"]=="train",fs_component["source"]].map(lambda i: Counter(i)).values))
+                if (annotations["split"]=="dev").any():
+                    X_dev.append(vectorizer.transform(annotations.loc[annotations["split"]=="dev",fs_component["source"]].map(lambda i: Counter(i)).values))
+                if eval_test and (annotations["split"]=="test").any():
+                    X_test.append(vectorizer.transform(annotations.loc[annotations["split"]=="test",fs_component["source"]].map(lambda i: Counter(i)).values))
+                ## Cache Vectorizer
+                self._base_vectorizers[fs_component["source"]] = vectorizer
+        ## Stack
+        X_train = hstack(X_train).tocsr()
+        X_dev = hstack(X_dev).tocsr() if len(X_dev) > 0 else None
+        X_test = hstack(X_test).tocsr() if eval_test and len(X_test) > 0 else None
+        ## Cache Features
+        self._base_features = features
+        ## Return
+        return features, X_train, X_dev, X_test
+    
+    def build_base_feature_set_independent(self,
+                                           annotations):
+        """
+        
+        """
+        ## Initialize Cache
+        features = []
+        X_out = []
+        ## Build Components
+        sources = set()
+        for fs_component in self._feature_set["components"]:
+            ## Check Source
+            if fs_component["source"] in sources:
+                continue
+            ## Binary
+            if fs_component["source"] in ["keyword","keyword_std","setting"]:
+                ## Target Attribute
+                fs_attr = {"keyword":"keyword_negated","keyword_std":"keyword_standardized","setting":"encounter_type"}
+                fs_attr = fs_attr.get(fs_component["source"])
+                ## Get Vectorizer
+                vectorizer = self._base_vectorizers[fs_component["source"]]
+                ## Extend Names
+                features.extend([(fs_component["source"],k) for k in vectorizer.get_feature_names()])
+                ## Add to Cache
+                X_out.append(vectorizer.transform(annotations[fs_attr].map(lambda i: {i:True}).values))
+            ## Counts
+            elif fs_component["source"] == "tokens" or fs_component["source"] == "tokens_full":
+                ## Get Vectorizer
+                vectorizer = self._base_vectorizers[fs_component["source"]]
+                ## Extend Names
+                features.extend([(fs_component["source"],k) for k in vectorizer.get_feature_names()])
+                ## Add to Cache
+                X_out.append(vectorizer.transform(annotations[fs_component["source"]].map(lambda i: Counter(i)).values))
+        ## Stack
+        X_out = hstack(X_out).tocsr()
+        ## Check Features
+        if features != self._base_features:
+            raise ValueError("Found a mismatch between extracted feature set and learned feature set.")
+        return X_out, features
+
+    def transform_base_feature_set(self,
+                                   X_train,
+                                   features,
+                                   X_dev=None,
+                                   X_test=None):
+        """
+        
+        """
+        ## Re-initialize Transformers
+        self._transformers = {"components":{}, "interactions":{}, "postprocessing":{}}
+        ## Individual Component Representations
+        features_t = []
+        X_train_t, X_dev_t, X_test_t = [], [], ([] if X_test is not None else None)
+        features_comp_names = set()
+        for fs_component in self._feature_set["components"]:
+            ## Track Component Names
+            features_comp_names.add(fs_component["name"])
+            ## Find Appropriate Source Indices
+            fs_component_inds = [i for i, (fsrc,fval) in enumerate(features) if fsrc == fs_component["source"]]
+            ## Representation (Binary, Counts, Encoding -> No Change)
+            if fs_component["type"] == "binary" or fs_component["type"] == "counts":
+                ## Add to Cache
+                X_train_t.append(X_train[:,fs_component_inds])
+                if X_dev is not None:
+                    X_dev_t.append(X_dev[:,fs_component_inds])
+                if X_test is not None:
+                    X_test_t.append(X_test[:,fs_component_inds])
+                ## Update Features
+                features_t.extend([(fs_component["name"], features[ind][1]) for ind in fs_component_inds])
+            ## Representation (Tf-IDF)
+            elif fs_component["type"] == "tfidf":
+                ## Fit Transformer
+                tfidf_transformer = TfidfTransformer(**fs_component["type_kwargs"])
+                tfidf_transformer = tfidf_transformer.fit(X_train[:,fs_component_inds])
+                ## Store Transformer
+                self._transformers["components"][fs_component["name"]] = tfidf_transformer
+                ## Apply Transform and Cache
+                X_train_t.append(tfidf_transformer.transform(X_train[:,fs_component_inds]))
+                if X_dev is not None:
+                    X_dev_t.append(tfidf_transformer.transform(X_dev[:,fs_component_inds]))
+                if X_test is not None:
+                    X_test_t.append(tfidf_transformer.transform(X_test[:,fs_component_inds]))
+                ## Update Features
+                features_t.extend([(fs_component["name"], features[ind][1]) for ind in fs_component_inds])
+            ## Other
+            else:
+                raise NotImplementedError("Feature type '{}' not recognized".format(fs_component["type"]))
+        ## Concatenate Transformed Features
+        X_train_t = hstack(X_train_t).tocsr()
+        X_dev_t = hstack(X_dev_t).tocsr() if X_dev is not None else None
+        X_test_t = hstack(X_test_t).tocsr() if X_test is not None else None
+        ## Feature Set Interactions
+        features_int = []
+        X_train_int, X_dev_int, X_test_int = [], [], ([] if X_test is not None else None)
+        features_int_names = set()
+        for fs_interaction in self._feature_set["interactions"]:
+            ## Check Sources
+            if fs_interaction["component_1"] not in features_comp_names:
+                raise KeyError("Component 1 feature not found: '{}'".format(fs_interaction["component_1"]))
+            if fs_interaction["component_2"] not in features_comp_names:
+                raise KeyError("Component 2 feature not found: '{}'".format(fs_interaction["component_2"]))
+            ## Keep Track of Interaction Ids
+            features_int_names.add(fs_interaction["name"])
+            ## Interaction Indices
+            comp_1_inds = [i for i, f in enumerate(features_t) if f[0] == fs_interaction["component_1"]]
+            comp_2_inds = [i for i, f in enumerate(features_t) if f[0] == fs_interaction["component_2"]]
+            if len(comp_1_inds) < len(comp_2_inds):
+                comp_1_inds, comp_2_inds = comp_2_inds, comp_1_inds
+            ## Compute Interactions
+            X_comp_int_train = hstack([X_train_t[:,comp_1_inds].multiply(X_train_t[:,comp_2_inds][:,i]) for i in range(len(comp_2_inds))]).tocsr()
+            if X_dev is not None:
+                X_comp_int_dev = hstack([X_dev_t[:,comp_1_inds].multiply(X_dev_t[:,comp_2_inds][:,i]) for i in range(len(comp_2_inds))]).tocsr()
+            if X_test is not None:
+                X_comp_int_test = hstack([X_test_t[:,comp_1_inds].multiply(X_test_t[:,comp_2_inds][:,i]) for i in range(len(comp_2_inds))]).tocsr()
+            feats_comp_int = [(fs_interaction["name"], "({})x({})".format("{}={}".format(*features_t[nind]),"{}={}".format(*features_t[tind]))) for nind in comp_2_inds for tind in comp_1_inds]
+            ## Interaction Transformation
+            if fs_interaction["type"] is not None:
+                ## TF-IDF (Post-Interaction)
+                if fs_interaction["type"] == "tfidf":
+                    ## Fit
+                    tfidf_transformer = TfidfTransformer(**fs_interaction["type_kwargs"])
+                    tfidf_transformer = tfidf_transformer.fit(X_comp_int_train)
+                    ## Cache Transformer
+                    self._transformers["interaction"][fs_interaction["name"]] = tfidf_transformer
+                    ## Transform
+                    X_comp_int_train = tfidf_transformer.transform(X_comp_int_train)
+                    if X_dev is not None:
+                        X_comp_int_dev = tfidf_transformer.transform(X_comp_int_dev)
+                    if X_test is not None:
+                        X_comp_int_test = tfidf_transformer.transform(X_comp_int_test)
+                else:
+                    raise NotImplementedError("Interaction type not recognized: '{}'".format(fs_interaction["type"]))
+            ## Cache
+            X_train_int.append(X_comp_int_train)
+            if X_dev is not None:
+                X_dev_int.append(X_comp_int_dev)
+            if X_test is not None:
+                X_test_int.append(X_comp_int_test)
+            ## Update Features
+            features_int.extend(feats_comp_int)
+        ## Concatenate Interaction Features
+        X_train_int = hstack(X_train_int).tocsr() if len(X_train_int) > 0 else None
+        X_dev_int = hstack(X_dev_int).tocsr() if len(X_dev_int) > 0 else None
+        X_test_int = hstack(X_test_int).tocsr() if X_test is not None and len(X_test_int) > 0 else None
+        ## Final Representation
+        features_r = []
+        X_train_r, X_dev_r, X_test_r = [], [], ([] if X_test is not None else None)
+        for fs_rep_name in self._feature_set["representation"]:
+            ## Ensure Exists
+            if fs_rep_name not in features_comp_names | features_int_names:
+                raise KeyError("Feature representation not found: '{}'".format(fs_rep_name))
+            ## See if Interaction or Component
+            if fs_rep_name in features_comp_names:
+                ## Get Appropriate Indices
+                fs_rep_ind = [i for i, f in enumerate(features_t) if f[0] == fs_rep_name]
+                ## Cache
+                X_train_r.append(X_train_t[:,fs_rep_ind])
+                if X_dev is not None:
+                    X_dev_r.append(X_dev_t[:,fs_rep_ind])
+                if X_test is not None:
+                    X_test_r.append(X_test_t[:,fs_rep_ind])
+                ## Update Features
+                features_r.extend([features_t[ind] for ind in fs_rep_ind])
+            elif fs_rep_name in features_int_names:
+                ## Get Appropriate Indices
+                fs_rep_ind = [i for i, f in enumerate(features_int) if f[0] == fs_rep_name]
+                ## Cache
+                X_train_r.append(X_train_int[:,fs_rep_ind])
+                if X_dev is not None:
+                    X_dev_r.append(X_dev_int[:,fs_rep_ind])
+                if X_test is not None:
+                    X_test_r.append(X_test_int[:,fs_rep_ind])
+                ## Update Features
+                features_r.extend([features_int[ind] for ind in fs_rep_ind])
+        ## Concatenate Final Feature Representation
+        X_train_r = hstack(X_train_r).tocsr() if len(X_train_r) > 0 else None
+        X_dev_r = hstack(X_dev_r).tocsr() if len(X_dev_r) > 0 else None
+        X_test_r = hstack(X_test_r).tocsr() if X_test is not None and len(X_test_r) > 0 else None
+        ## Standardization
+        cent = self._feature_set.get("standardize",{}).get("center",False)
+        scal = self._feature_set.get("standardize",{}).get("scale",False)
+        if cent or scal:
+            scaler = StandardScaler(with_mean=cent, with_std=scal)
+            X_train_r = csr_matrix(scaler.fit_transform(X_train_r.A)) if cent else scaler.fit_transform(X_train_r)
+            if X_dev is not None:
+                X_dev_r = csr_matrix(scaler.transform(X_dev_r.A)) if cent else scaler.transform(X_dev_r)
+            if X_test is not None:
+                X_test_r = csr_matrix(scaler.transform(X_test_r.A)) if cent else scaler.transform(X_test_r)
+            self._transformers["postprocessing"]["standardize"] = scaler
+        ## Cache Features
+        self._transformers_features = features_r
+        ## Return
+        return features_r, X_train_r, X_dev_r, X_test_r
+    
+    def transform_base_feature_set_independent(self,
+                                               X_out,
+                                               features):
+        """
+        
+        """
+        ## Individual Component Representations
+        features_t = []
+        X_out_t = []
+        features_comp_names = set()
+        for fs_component in self._feature_set["components"]:
+            ## Track Component Names
+            features_comp_names.add(fs_component["name"])
+            ## Find Appropriate Source Indices
+            fs_component_inds = [i for i, (fsrc,fval) in enumerate(features) if fsrc == fs_component["source"]]
+            ## Representation (Binary, Counts, Encoding -> No Change)
+            if fs_component["type"] == "binary" or fs_component["type"] == "counts":
+                ## Add to Cache
+                X_out_t.append(X_out[:,fs_component_inds])
+                ## Update Features
+                features_t.extend([(fs_component["name"], features[ind][1]) for ind in fs_component_inds])
+            ## Representation (Tf-IDF)
+            elif fs_component["type"] == "tfidf":
+                ## Get Transformer
+                tfidf_transformer = self._transformers["components"][fs_component["name"]]
+                ## Apply Transform and Cache
+                X_out_t.append(tfidf_transformer.transform(X_out[:,fs_component_inds]))
+                ## Update Features
+                features_t.extend([(fs_component["name"], features[ind][1]) for ind in fs_component_inds])
+            ## Other
+            else:
+                raise NotImplementedError("Feature type '{}' not recognized".format(fs_component["type"]))
+        ## Concatenate Transformed Features
+        X_out_t = hstack(X_out_t).tocsr()
+        ## Feature Set Interactions
+        features_int = []
+        X_out_int = []
+        features_int_names = set()
+        for fs_interaction in self._feature_set["interactions"]:
+            ## Check Sources
+            if fs_interaction["component_1"] not in features_comp_names:
+                raise KeyError("Component 1 feature not found: '{}'".format(fs_interaction["component_1"]))
+            if fs_interaction["component_2"] not in features_comp_names:
+                raise KeyError("Component 2 feature not found: '{}'".format(fs_interaction["component_2"]))
+            ## Keep Track of Interaction Ids
+            features_int_names.add(fs_interaction["name"])
+            ## Interaction Indices
+            comp_1_inds = [i for i, f in enumerate(features_t) if f[0] == fs_interaction["component_1"]]
+            comp_2_inds = [i for i, f in enumerate(features_t) if f[0] == fs_interaction["component_2"]]
+            if len(comp_1_inds) < len(comp_2_inds):
+                comp_1_inds, comp_2_inds = comp_2_inds, comp_1_inds
+            ## Compute Interactions
+            X_comp_int_out = hstack([X_out_int[:,comp_1_inds].multiply(X_out_int[:,comp_2_inds][:,i]) for i in range(len(comp_2_inds))]).tocsr()
+            feats_comp_int = [(fs_interaction["name"], "({})x({})".format("{}={}".format(*features_t[nind]),"{}={}".format(*features_t[tind]))) for nind in comp_2_inds for tind in comp_1_inds]
+            ## Interaction Transformation
+            if fs_interaction["type"] is not None:
+                ## TF-IDF (Post-Interaction)
+                if fs_interaction["type"] == "tfidf":
+                    ## Get Transformer
+                    tfidf_transformer = self._transformers["interaction"][fs_interaction["name"]]
+                    ## Transform
+                    X_comp_int_out = tfidf_transformer.transform(X_comp_int_out)
+                else:
+                    raise NotImplementedError("Interaction type not recognized: '{}'".format(fs_interaction["type"]))
+            ## Cache
+            X_out_int.append(X_comp_int_out)
+            ## Update Features
+            features_int.extend(feats_comp_int)
+        ## Concatenate Interaction Features
+        X_out_int = hstack(X_out_int).tocsr() if len(X_out_int) > 0 else None
+        ## Final Representation
+        features_r = []
+        X_out_r = []
+        for fs_rep_name in self._feature_set["representation"]:
+            ## Ensure Exists
+            if fs_rep_name not in features_comp_names | features_int_names:
+                raise KeyError("Feature representation not found: '{}'".format(fs_rep_name))
+            ## See if Interaction or Component
+            if fs_rep_name in features_comp_names:
+                ## Get Appropriate Indices
+                fs_rep_ind = [i for i, f in enumerate(features_t) if f[0] == fs_rep_name]
+                ## Cache
+                X_out_r.append(X_out_t[:,fs_rep_ind])
+                ## Update Features
+                features_r.extend([features_t[ind] for ind in fs_rep_ind])
+            elif fs_rep_name in features_int_names:
+                ## Get Appropriate Indices
+                fs_rep_ind = [i for i, f in enumerate(features_int) if f[0] == fs_rep_name]
+                ## Cache
+                X_out_r.append(X_out_int[:,fs_rep_ind])
+                ## Update Features
+                features_r.extend([features_int[ind] for ind in fs_rep_ind])
+        ## Concatenate Final Feature Representation
+        X_out_r = hstack(X_out_r).tocsr() if len(X_out_r) > 0 else None
+        ## Standardization
+        cent = self._feature_set.get("standardize",{}).get("center",False)
+        scal = self._feature_set.get("standardize",{}).get("scale",False)
+        if cent or scal:
+            scaler = self._transformers["postprocessing"]["standardize"]
+            X_out_r = csr_matrix(scaler.transform(X_out_r.A)) if cent else scaler.transform(X_out_r)
+        ## Check Against Cache Features
+        if features_r != self._transformers_features:
+            raise ValueError("Found mismatch between learned feature transform and extracted features.")
+        ## Return
+        return X_out_r, features_r
+    
+    def save(self,
+             filename):
+        """
+        
+        """
+        ## Save
+        _ = joblib.dump(self, filename)
