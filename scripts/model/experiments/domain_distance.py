@@ -28,7 +28,7 @@ from sklearn.model_selection import KFold
 from sklearn import metrics
 
 ## Private
-from stigma import util, settings
+from stigma import settings
 from stigma.model.baseline import ConditionalMajorityClassifier
 from stigma.model import util as model_utils
 from stigma.model import bert as bert_utils

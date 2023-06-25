@@ -13,7 +13,6 @@ import sys
 import json
 import argparse
 import warnings
-from uuid import uuid4
 
 ## External
 import joblib
@@ -21,10 +20,8 @@ import numpy as np
 import pandas as pd
 from tqdm import tqdm
 from sklearn import dummy, linear_model, ensemble, metrics, model_selection
-from scipy.sparse import save_npz
 
 ## Local
-from stigma import util
 from stigma import settings
 from stigma import text_utils
 from stigma.model import util as model_utils

@@ -3,20 +3,16 @@
 #########################
 
 ## Standard Libary
-import os
-import json
 from copy import copy
-from glob import glob
 from collections import Counter
 
 ## External Libraries
 import joblib
 import numpy as np
 import pandas as pd
-from tqdm import tqdm
-from scipy.sparse import csr_matrix, vstack, hstack
+from scipy.sparse import csr_matrix, hstack
 from sklearn.feature_extraction import DictVectorizer
-from sklearn.preprocessing import normalize, StandardScaler
+from sklearn.preprocessing import StandardScaler
 from sklearn.feature_extraction.text import TfidfTransformer
 
 ## Local

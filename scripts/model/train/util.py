@@ -9,7 +9,6 @@ Model train/evaluation functions
 
 ## Standard Library
 import os
-import sys
 
 ## External Libraries
 import numpy as np

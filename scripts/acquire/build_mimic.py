@@ -43,20 +43,52 @@ def parse_command_line():
     args = parser.parse_args()
     return args
 
+def _verify_mimic_paths():
+    """
+    
+    """
+    ## Check for Directory
+    if not os.path.exists(settings.MIMIC_SOURCE_DIR):
+        raise FileNotFoundError(f"Unable to locate MIMIC data directory: '{settings.MIMIC_SOURCE_DIR}'")
+    ## Iterate Through Files
+    mimic_files = ["admissions.csv.gz","diagnoses_icd.csv.gz","discharge.csv.gz","patients.csv.gz","services.csv.gz","transfers.csv.gz"]
+    missing_files = False
+    for mf in mimic_files:
+        if not os.path.exsts(mf):
+            missing_files = True
+            print(f">> WARNING - Missing expected MIMIC data file: '{mf}'")
+    ## Raise Error if Necessary
+    if missing_files:
+        raise FileNotFoundError("Unable to locate all required MIMIC dataset files.")
+    return True
+
+def _verify_keywords(keyword_file):
+    """
+    
+    """
+    ## Check for File
+    if not os.path.exists(keyword_file):
+        raise FileNotFoundError(f"Unable to locate keyword file: '{keyword_file}'")
+    return True
+
 def run_search(args):
     """
     
     """
-    ## TODO: Verify Paths, Check for Existing Matches
-
+    ## Check For Files
+    print("[Verifying Data Paths]")
+    _ = _verify_mimic_paths()
+    _ = _verify_keywords()
     ## Initialize Output Directory
     if not os.path.exists(args.annotations_dir):
         print(f"[Initializing Annotation Output Directory: '{args.annotations_dir}']")
         _ = os.makedirs(args.annotations_dir)
     ## Load Keywords
+    print("[Loading Keywords]")
     with open(f"{args.keywords}","r") as the_file:
         task2keyword = json.load(the_file)
     ## Initialize Search Module
+    print("[Initializing Keyword Search Tool]")
     searcher = text_utils.KeywordSearch(task2keyword=task2keyword)
     ## Initialize Match Cache
     matches = []
