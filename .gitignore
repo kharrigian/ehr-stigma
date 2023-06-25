@@ -6,6 +6,7 @@
 
 ## Data
 data/resources/
+!data/resources/README.md
 !data/resources/keywords/*
 data/models/
 data/results/
