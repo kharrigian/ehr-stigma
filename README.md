@@ -99,6 +99,13 @@ We **strongly** recommend using a virtual environment manager (e.g., `conda`) wh
 
 *Note:* Our toolkit was developed and tested using Python 3.10. We cannot guarantee that other versions of Python will support the entirety of our codebase. That said, we expect the majority of functionality to be preserved as long as you are using Python >= 3.7.
 
+### Testing
+
+To validate that data was downloaded correctly and the package was installed appropriately, you can make use of our small test suite.
+
+* `pytest -v -Wignore tests/test_mimic.py`: Ensures we are able to load the MIMIC-IV dataset and annotations as expected.
+* `pytest -v -Wignore tests/test_api.py`: Ensures we are able to load default models and arrive at expected predictions.
+
 ## API Usage
 
 For a quick introduction to our API, we recommend exploring our [quickstart notebook](notebooks/api.demo.ipynb). We have abstracted most of the codebase into a few modules to make interacting with the pretrained models easy.

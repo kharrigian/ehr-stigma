@@ -13,3 +13,4 @@ umap-learn
 spacy
 pysbd
 medspacy
+pytest

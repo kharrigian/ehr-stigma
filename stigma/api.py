@@ -312,6 +312,7 @@ class StigmaBaselineModel(object):
             predictions.append(self._model_dict["classifier"].predict_proba(X))
         ## Format All Predictions
         predictions = pd.DataFrame(np.vstack(predictions), columns=self._model_dict["targets"])
+        predictions = predictions.sort_index(axis=1)
         ## Return
         return predictions
 
@@ -528,5 +529,6 @@ class StigmaBertModel(object):
         ## Isolate Appropriate Prediction Set
         predictions = predictions[self.model_dict["task_id"]].to("cpu").numpy()
         predictions = pd.DataFrame(data=predictions, columns=self.model_dict["targets"])
+        predictions = predictions.sort_index(axis=1)
         ## Return
         return predictions
