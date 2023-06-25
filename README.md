@@ -58,6 +58,8 @@ python scripts/acquire/build_mimic.py \
     --load_window_size 10
 ```
 
+If you'd only like to run the search procedure for notes in the annotated dataset, you can do so by adding the `--load_annotations_only` flag to the command above.
+
 #### Expected Resource Structure
 
 If the utility scripts above worked appropriately, you should see the directory structure below.
