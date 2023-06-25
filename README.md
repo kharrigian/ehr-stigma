@@ -20,6 +20,16 @@ This is the official repository for the ACL 2023 paper, ["Characterization of St
 
 If you encounter issues with the code in this repository, we encourage you to open a new GitHub issue or contact us directly via [email](mailto:kharrigian@jhu.edu). We will be more than happy to help you get up and running with our code, models, and data.
 
+## Status
+
+*Last Updated*: June 25, 2023
+
+Annotations and models will be published through the [PhysioNet](https://physionet.org) platform. Our submission is currently under review by the platform's editors. References to the project within this README and other files of this repository are currently non-functional placeholders.
+
+To receive notice regarding the availability of annotations and models, please consider submitting an email address to [this form](https://forms.gle/p6prTDDTwXbYUJhw8). We will notify you as soon the assets are approved. 
+
+If you haven't already, we encourage you to use this time to complete PhysioNet's credentialing process. This includes submitting documents which confirm you have completed appropriate human subjects IRB training.
+
 ## Resources
 
 This repository only provides an API for interacting with our data and models. The actual data (including annotations) and models are *not* hosted natively within this repository. To access these resources, you must first go through the appropriate credentialing process on [PhysioNet](https://physionet.org). Once you have signed our usage agreement on PhysioNet, you can make full use of our toolkit.
