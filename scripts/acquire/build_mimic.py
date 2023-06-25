@@ -54,7 +54,7 @@ def _verify_mimic_paths():
     mimic_files = ["admissions.csv.gz","diagnoses_icd.csv.gz","discharge.csv.gz","patients.csv.gz","services.csv.gz","transfers.csv.gz"]
     missing_files = False
     for mf in mimic_files:
-        if not os.path.exsts(mf):
+        if not os.path.exists(mf):
             missing_files = True
             print(f">> WARNING - Missing expected MIMIC data file: '{mf}'")
     ## Raise Error if Necessary
