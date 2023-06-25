@@ -6,7 +6,7 @@
 
 ## Data
 data/resources/
-!data/resources/keywords/
+!data/resources/keywords/*
 data/models/
 data/results/
 
