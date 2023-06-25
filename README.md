@@ -142,3 +142,8 @@ Throughout the repository, you may notice certain naming conventions which do no
 ## Other Functionalities
 
 Although the API shown above should be sufficient for most purposes, this repository contains a substantial amount of additional code which some users may find helpful. This includes scripts which may be used to reproduce our published results. The bash files contained in `jobs/` showcase most of the functionalities. Please see the [README](jobs/README.md) file for more information about each set of commands.
+
+## License
+
+Code, models, and data are released under the *PhysioNet Credentialed Health Data License* (Version 1.5.0). You may only use these resources for non-commercial, scientific research purposes.
+
