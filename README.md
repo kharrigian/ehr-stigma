@@ -38,6 +38,16 @@ Our models can be acquired from PhysioNet after completing the same requirements
 
 Once you have completed this credentialing process, you can use our utility script `./scripts/acquire/get_models_and_labels.sh` to download the pretrained models and annotations. Models will be downloaded to `data/resources/models/`, while annotations will be downloaded to `data/resources/annotations/`.
 
+If you have downloaded the MIMIC-IV dataset, you can create an augmented annotated dataset for training new models using `scripts/acquire/build_mimic.py`.
+
+```bash
+python scripts/acquire/build_mimic.py \
+    --annotations_dir data/resources/annotations/
+    --keywords data/resources/keywords/keywords.json \
+    --load_chunksize 1000 \
+    --load_window_size 10
+```
+
 #### Expected Resource Structure
 
 If the utility scripts above worked appropriately, you should see the directory structure below.
