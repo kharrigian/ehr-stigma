@@ -78,7 +78,7 @@ def run_search(args):
     ## Check For Files
     print("[Verifying Data Paths]")
     _ = _verify_mimic_paths()
-    _ = _verify_keywords()
+    _ = _verify_keywords(keyword_file=args.keywords)
     ## Initialize Output Directory
     if not os.path.exists(args.annotations_dir):
         print(f"[Initializing Annotation Output Directory: '{args.annotations_dir}']")
