@@ -18,6 +18,8 @@ This is the official repository for the ACL 2023 paper, ["Characterization of St
 }
 ```
 
+If you encounter issues with the code in this repository, we encourage you to open a new GitHub issue or contact us directly via [email](mailto:kharrigian@jhu.edu). We will be more than happy to help you get up and running with our code, models, and data.
+
 ## Resources
 
 This repository only provides an API for interacting with our data and models. The actual data (including annotations) and models are *not* hosted natively within this repository. To access these resources, you must first go through the appropriate credentialing process on [PhysioNet](https://physionet.org). Once you have signed our usage agreement on PhysioNet, you can make full use of our toolkit.
@@ -118,3 +120,15 @@ model = StigmaBertModel(model="mimic-iv-discharge_clinical-bert",
 predictions = model.predict(text=example_text,
                             keywords=example_keywords)
 ```
+
+#### A Note on Phrasing
+
+Throughout the repository, you may notice certain naming conventions which do not align with what was presented in the ACL paper. The main differences to be aware of are as follows:
+
+1. `keyword` is what we use to denote the anchors referenced in the paper.
+2. `keyword_category` is what we use to refer to the 3 stigma classification tasks.
+3. `adamant`, `compliance`, and `other` are shorthand keyword categories which refer to the Credibility and Obstinance, Compliance, and Other Descriptors tasks, respectively.
+
+## Other Functionalities
+
+Although the API shown above should be sufficient for most purposes, this repository contains a substantial amount of additional code which some users may find helpful. This includes scripts which may be used to reproduce our published results. The bash files contained in `jobs/` showcase most of the functionalities. Please see the [README](jobs/README.md) file for more information about each set of commands.
