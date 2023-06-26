@@ -1,0 +1,15 @@
+## Artifacts
+*.egg-info*
+*.pyc
+*__pycache__*
+*.DS_Store
+
+## Data
+data/resources/
+!data/resources/README.md
+!data/resources/keywords/*
+data/models/
+data/results/
+
+## Internal Utilities
+scripts/private

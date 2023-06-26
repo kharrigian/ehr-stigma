@@ -1,0 +1,16 @@
+numpy
+tqdm
+cython
+pandas
+joblib
+matplotlib
+scikit-learn
+unidecode
+statsmodels
+torch
+transformers
+umap-learn
+spacy
+pysbd
+medspacy
+pytest
