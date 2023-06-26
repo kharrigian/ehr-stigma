@@ -42,11 +42,11 @@ Once you have completed the credentialing process, you can easily acquire the mi
 
 #### Labels and Models
 
-We have opted to keep our labels and models behind a gate for a few reasons. First, although we do not expect our training procedure to encode sensitive information regarding the MIMIC dataset, the risk is nonzero and worth respecting. Furthermore, if we release models in the future which do allow end-users to extract sensitive information, existing end-uers will be able to acquire them seamlessly. Finally, by requiring end-users to complete IRB training prior to accessing our models, we can limit the risk of malevolent use.
+We have opted to keep our labels and models behind a gate for a few reasons. First, although we do not expect our training procedure to encode sensitive information regarding the MIMIC dataset, the risk is nonzero and worth respecting. Furthermore, if we release models in the future which do allow end-users to extract sensitive information, existing end-users will be able to acquire them seamlessly. Finally, by requiring end-users to complete IRB training prior to accessing our models, we can limit the risk of malevolent use.
 
-Our models can be acquired from PhysioNet after completing the same requirements necessary to access MIMIC data. If you already have access to MIMIC, downloading our models should only require you sign our [data usage agreement](TBD).
+Our models can be acquired from PhysioNet after completing a data usage agreement. If you already have access to MIMIC, downloading our models should only require you sign our [data usage agreement](TBD).
 
-Once you have completed this credentialing process, you can use our utility script `./scripts/acquire/get_models_and_labels.sh` to download the pretrained models and annotations. Models will be downloaded to `data/resources/models/`, while annotations will be downloaded to `data/resources/annotations/`.
+Once you have completed this process, you can use our utility script `./scripts/acquire/get_models_and_labels.sh` to download the pretrained models and annotations. Models will be downloaded to `data/resources/models/`, while annotations will be downloaded to `data/resources/annotations/`.
 
 If you have downloaded the MIMIC-IV dataset, you can create an augmented annotated dataset for training new models using `scripts/acquire/build_mimic.py`.
 
