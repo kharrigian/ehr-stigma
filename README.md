@@ -166,3 +166,15 @@ Although the API shown above should be sufficient for most purposes, this reposi
 
 Code, models, and data are released under the *PhysioNet Credentialed Health Data License* (Version 1.5.0). You may only use these resources for non-commercial, scientific research purposes.
 
+## Contributors
+
+This toolkit would not have been possible to create without the help of the contributors below. If you are interested in extending the functionality of the toolkit and would like to contribute, please reach out!
+
+* Ayah Zirikly
+* Brant Chee
+* Yahan Li
+* Alya Ahmad
+* Anne R. Links
+* Somnath Saha
+* Mary Catherine Beach
+* Mark Dredze
