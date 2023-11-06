@@ -52,7 +52,7 @@ If you have downloaded the MIMIC-IV dataset, you can create an augmented annotat
 
 ```bash
 python scripts/acquire/build_mimic.py \
-    --annotations_dir data/resources/annotations/
+    --annotations_dir data/resources/annotations/ \
     --keywords data/resources/keywords/keywords.json \
     --load_chunksize 1000 \
     --load_window_size 10
