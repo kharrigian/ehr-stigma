@@ -83,7 +83,7 @@ MODELS = {
 
 ## BERT Tokenizers (Should align with MODELS)
 TOKENIZERS = {
-    "mimic-iv-discharge_base-bert":"emilyalsentzer/Bio_ClinicalBERT",
+    "mimic-iv-discharge_base-bert":"bert-base-uncased",
     "mimic-iv-discharge_clinical-bert":"emilyalsentzer/Bio_ClinicalBERT"
 }
 

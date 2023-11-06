@@ -1,6 +1,6 @@
 # Characterization of Stigmatizing Language in Medical Records
 
-This is the official repository for the ACL 2023 paper, ["Characterization of Stigmatizing Language in Medical Records."](notebooks/resources/ACL2023.pdf) If you publish any research which uses the code, data, and/or models within this repo, we kindly ask you to cite us:
+This is the official repository for the ACL 2023 paper, ["Characterization of Stigmatizing Language in Medical Records."](https://aclanthology.org/2023.acl-short.28/) If you publish any research which uses the code, data, and/or models within this repo, we kindly ask you to cite us:
 
 ```bibtex
 @inproceedings{harrigian2023characterizing,
@@ -22,29 +22,25 @@ If you encounter issues with the code in this repository, we encourage you to op
 
 ## Status
 
-*Last Updated*: June 25, 2023
+*Last Updated*: November 6, 2023
 
-Annotations and models will be published through the [PhysioNet](https://physionet.org) platform. Our submission is currently under review by the platform's editors. References to the project within this README and other files of this repository are currently non-functional placeholders.
-
-To receive notice regarding the availability of annotations and models, please consider submitting an email address to [this form](https://forms.gle/p6prTDDTwXbYUJhw8). We will notify you as soon the assets are approved. 
-
-If you haven't already, we encourage you to use this time to complete PhysioNet's credentialing process. This includes submitting documents which confirm you have completed appropriate human subjects IRB training.
+Annotations and models have officially been published through the [PhysioNet](https://doi.org/10.13026/n938-2385) platform. You will need to complete PhysioNet's credentialing process prior to receiving access to annotations and models. This includes submitting documents which confirm you have completed appropriate human subjects IRB training.
 
 ## Resources
 
-This repository only provides an API for interacting with our data and models. The actual data (including annotations) and models are *not* hosted natively within this repository. To access these resources, you must first go through the appropriate credentialing process on [PhysioNet](https://physionet.org). Once you have signed our usage agreement on PhysioNet, you can make full use of our toolkit.
+This repository only provides an API for interacting with our data and models. The actual data (including annotations) and models are *not* hosted natively within this repository. To access these resources, you must first go through the appropriate credentialing process on [PhysioNet](https://doi.org/10.13026/n938-2385). Once you have signed our usage agreement on PhysioNet, you can make full use of our toolkit.
 
 #### Data (MIMIC-IV)
 
 To replicate our experiments or train new models, you will need access to the [MIMIC-IV](https://physionet.org/content/mimiciv/2.2/) and [MIMIC-IV-Notes](https://physionet.org/content/mimic-iv-note/2.2/) datasets (v2.2). Both of these resources are hosted on PhysioNet and require completion of IRB-related training.
 
-Once you have completed the credentialing process, you can easily acquire the minimally necessary data resources using our utility script `./scripts/acquire/get_mimic.sh`. You will be asked for your PhysioNet username and password. Files will be downloaded to `data/resources/mimic-iv/`.
+Once you have completed the credentialing process, you can easily acquire the minimally necessary data resources using our utility script `./scripts/acquire/get_mimic.sh`. You will be asked for your PhysioNet username and password. Files will be downloaded to `data/resources/datasets/mimic-iv/`.
 
 #### Labels and Models
 
 We have opted to keep our labels and models behind a gate for a few reasons. First, although we do not expect our training procedure to encode sensitive information regarding the MIMIC dataset, the risk is nonzero and worth respecting. Furthermore, if we release models in the future which do allow end-users to extract sensitive information, existing end-users will be able to acquire them seamlessly. Finally, by requiring end-users to complete IRB training prior to accessing our models, we can limit the risk of malevolent use.
 
-Our models can be acquired from PhysioNet after completing a data usage agreement. If you already have access to MIMIC, downloading our models should only require you sign our [data usage agreement](TBD).
+Our models can be acquired from PhysioNet after completing a data usage agreement. If you already have access to MIMIC, downloading our models should only require you sign our [data usage agreement](https://doi.org/10.13026/n938-2385).
 
 Once you have completed this process, you can use our utility script `./scripts/acquire/get_models_and_labels.sh` to download the pretrained models and annotations. Models will be downloaded to `data/resources/models/`, while annotations will be downloaded to `data/resources/annotations/`.
 
@@ -52,7 +48,7 @@ If you have downloaded the MIMIC-IV dataset, you can create an augmented annotat
 
 ```bash
 python scripts/acquire/build_mimic.py \
-    --annotations_dir data/resources/annotations/
+    --annotations_dir data/resources/annotations/ \
     --keywords data/resources/keywords/keywords.json \
     --load_chunksize 1000 \
     --load_window_size 10
