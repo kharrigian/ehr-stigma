@@ -582,7 +582,7 @@ def _run_bert(dataset_id,
                                                        use_bert_pooler=model_settings["use_bert_pooler"],
                                                        p_dropout=model_settings["p_dropout"],
                                                        random_state=random_state).to(device)
-        _ = model.load_state_dict(torch.load(f"{model_dir}/checkpoint-{task_id_opt}/model.pth"))
+        _ = model.load_state_dict(torch.load(f"{model_dir}/checkpoint-{task_id_opt}/model.pth"),  strict=False)
         ## Put Model into Evaluation Mode
         model.eval()    
         ## Iterate Through Datasets to Generate Final Predictions
