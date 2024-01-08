@@ -109,7 +109,7 @@ def _predict(note_df,
                                                    p_dropout=init_params["p_dropout"],
                                                    use_bert_pooler=False if "use_bert_pooler" not in init_params else init_params["use_bert_pooler"],
                                                    random_state=init_params["random_state"]).to(args.device)
-    _ = model.load_state_dict(torch.load(f"{args.model}/model.pth", map_location=torch.device('cpu')))
+    _ = model.load_state_dict(torch.load(f"{args.model}/model.pth", map_location=torch.device('cpu')),strict=False)
     ## 
     _, predictions = model_bert.classification_evaluate_model(model=model,
                                                               dataset=dataset,

@@ -668,7 +668,7 @@ def main():
                                                        use_bert_pooler=minit.get("use_bert_pooler",False),
                                                        checkpoint=minit["checkpoint"],
                                                        p_dropout=minit["settings"]["p_dropout"])
-            _ = model.load_state_dict(torch.load(f"{mpath}/model.pth",torch.device("cpu")))
+            _ = model.load_state_dict(torch.load(f"{mpath}/model.pth",torch.device("cpu")), strict=False)
             model = model.to(args.device)
             ## Encode Dataset
             dataset = bert_utils.ClassificationTokenDataset(tokens=tokens,

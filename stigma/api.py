@@ -482,7 +482,7 @@ class StigmaBertModel(object):
                                                                                random_state=init_params["random_state"]).to(self._device)
         ## Load Weights
         print("[Initializing Model Weights]")
-        _ = self.model_dict["classifier"].load_state_dict(torch.load(f"{model}/model.pth", map_location=torch.device('cpu')))
+        _ = self.model_dict["classifier"].load_state_dict(torch.load(f"{model}/model.pth", map_location=torch.device('cpu')), strict=False)
     
     def predict(self,
                 text,
